@@ -11,14 +11,23 @@ from datetime import timedelta
 from bs4 import BeautifulSoup
 import requests
 
+
+
 from homeassistant.util import Throttle
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components.climate import (
     ClimateEntity, PLATFORM_SCHEMA)
-from homeassistant.components.climate.const import (SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, HVAC_MODE_HEAT,CURRENT_HVAC_HEAT,CURRENT_HVAC_IDLE)
+
+from homeassistant.components.climate.const import (
+    HVACMode, HVACAction
+)
+from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.const import (
     CONF_ID, CONF_NAME, ATTR_TEMPERATURE, CONF_PASSWORD,
-    CONF_USERNAME, TEMP_CELSIUS, CONF_DEVICES)
+    CONF_USERNAME
+)
+from homeassistant.util.unit_system import UnitOfTemperature
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,8 +43,7 @@ ICON = "mdi:thermometer"
 MAX_TEMP = 75
 MIN_TEMP = 0
 
-SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE
-SUPPORT_MODES = [HVAC_MODE_HEAT, HVAC_MODE_OFF]
+
 
 def validate_name(config):
     """Validate device name."""
@@ -97,21 +105,18 @@ class Climote(ClimateEntity):
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        return SUPPORT_FLAGS
+        return ClimateEntityFeature.TARGET_TEMPERATURE
 
     @property
     def hvac_mode(self):
-        """Return current operation. ie. heat, cool, off."""
-        zone = "zone" + str(self._zoneid)
-        _LOGGER.debug(self._climote.data)
-        return 'heat' if self._climote.data[zone]["status"] == '5' else 'off'
+        """Return current operation: heat or off."""
+        zone = f"zone{self._zoneid}"
+        return HVACMode.HEAT if self._climote.data[zone]["status"] == "5" else HVACMode.OFF
 
     @property
     def hvac_modes(self):
-        """Return the list of available hvac operation modes.
-        Need to be a subset of HVAC_MODES.
-        """
-        return SUPPORT_MODES
+        """Return the list of available HVAC operation modes."""
+        return [HVACMode.HEAT, HVACMode.OFF]
 
     @property
     def name(self):
@@ -126,7 +131,7 @@ class Climote(ClimateEntity):
     @property
     def temperature_unit(self):
         """Return the unit of measurement."""
-        return TEMP_CELSIUS
+        return UnitOfTemperature.CELSIUS
 
     @property
     def target_temperature_step(self):
@@ -162,21 +167,19 @@ class Climote(ClimateEntity):
     @property
     def hvac_action(self):
         """Return current operation."""
-        zone = "zone" + str(self._zoneid)
-        return CURRENT_HVAC_HEAT if self._climote.data[zone]["status"] == '5' \
-                           else CURRENT_HVAC_IDLE
+        zone = f"zone{self._zoneid}"
+        return HVACAction.HEATING if self._climote.data[zone]["status"] == "5" else HVACAction.IDLE
 
-    def set_hvac_mode(self,hvac_mode):
-        if(hvac_mode==HVAC_MODE_HEAT):
+    def set_hvac_mode(self, hvac_mode):
+        if hvac_mode == HVACMode.HEAT:
             """Turn Heating Boost On."""
             res = self._climote.boost(self._zoneid, 1)
-            if(res):
-                self._force_update = True
+            self._force_update = True
             return res
-        if(hvac_mode==HVAC_MODE_OFF):
+        if hvac_mode == HVACMode.OFF:
             """Turn Heating Boost Off."""
-            res = self._climote.off(self._zoneid, 0)
-            if(res):
+            res = self._climote.boost(self._zoneid, 0)
+            if res:
                 self._force_update = True
             return res
 
